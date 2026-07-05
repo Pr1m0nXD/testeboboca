@@ -188,20 +188,20 @@
 
     // ==================== CARREGAMENTO DE ASSETS ====================
     const tilesetGround = new Image();
-    tilesetGround.src = 'assets/imagem/tileset.png';
-    const tilesetLibrary = new Image();
-    tilesetLibrary.src = 'assets/imagem/library.png';
+    tilesetGround.src = 'assets/imagem/tileset.png';   // Tileset de chão
+    const tilesetObjects = new Image();
+    tilesetObjects.src = 'assets/imagem/objects.png';  // Objetos (estantes, tochas, estátuas, pedestal)
     const playerSprite = new Image();
-    playerSprite.src = 'assets/imagem/charactersheet.png';
+    playerSprite.src = 'assets/imagem/charactersheet.png'; // Personagem
 
     let assetsLoaded = 0;
     const totalAssets = 3;
     function onAssetLoad() { assetsLoaded++; }
     tilesetGround.onload = onAssetLoad;
-    tilesetLibrary.onload = onAssetLoad;
+    tilesetObjects.onload = onAssetLoad;
     playerSprite.onload = onAssetLoad;
     tilesetGround.onerror = ()=> console.warn('tileset.png não encontrado');
-    tilesetLibrary.onerror = ()=> console.warn('library.png não encontrado');
+    tilesetObjects.onerror = ()=> console.warn('objects.png não encontrado');
     playerSprite.onerror = ()=> console.warn('charactersheet.png não encontrado');
 
     const FRAME_WIDTH=32, FRAME_HEIGHT=48;
@@ -221,7 +221,7 @@
         woodBroken:   { sx:256, sy:96 },
     };
 
-    // Coordenadas dos assets da biblioteca (library.png)
+    // Coordenadas dos assets da biblioteca (objects.png)
     const LIB = {
         bookshelfTop:    { sx:0,   sy:0 },
         bookshelfMid:    { sx:32,  sy:0 },
@@ -365,7 +365,6 @@
         }
     });
     window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; keys[e.code]=false; });
-    // Também inicia áudio no clique (para mobile)
     window.addEventListener('click', startAudio, { once: true });
 
     function checkCollision(nx,ny) {
@@ -579,15 +578,15 @@
                 ctx.fillStyle='#2a2218'; ctx.fillRect(rx+4,ry+4,TILE_SIZE-8,TILE_SIZE-8);
                 break;
             case TILES.SHELF_H:
-                ctx.drawImage(tilesetLibrary, LIB.bookshelfMid.sx, LIB.bookshelfMid.sy, 32,32, rx,ry-12, TILE_SIZE,TILE_SIZE+12);
+                ctx.drawImage(tilesetObjects, LIB.bookshelfMid.sx, LIB.bookshelfMid.sy, 32,32, rx,ry-12, TILE_SIZE,TILE_SIZE+12);
                 break;
             case TILES.SHELF_V:
-                ctx.drawImage(tilesetLibrary, LIB.bookshelfMid2.sx, LIB.bookshelfMid2.sy, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                ctx.drawImage(tilesetObjects, LIB.bookshelfMid2.sx, LIB.bookshelfMid2.sy, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
                 break;
             case TILES.SHELF_BROKEN:
                 ctx.save(); ctx.translate(rx+TILE_SIZE/2, ry+TILE_SIZE/2);
                 ctx.rotate((tx%3-1)*0.2);
-                ctx.drawImage(tilesetLibrary, LIB.bookshelfMid.sx, LIB.bookshelfMid.sy, 32,32, -16,-16, TILE_SIZE,TILE_SIZE);
+                ctx.drawImage(tilesetObjects, LIB.bookshelfMid.sx, LIB.bookshelfMid.sy, 32,32, -16,-16, TILE_SIZE,TILE_SIZE);
                 ctx.restore();
                 break;
             case TILES.PILLAR:
@@ -597,11 +596,11 @@
             case TILES.STATUE: {
                 const statues = [LIB.statuePrime, LIB.statueInfested, LIB.statueV1, LIB.statueJake, LIB.statueNiko, LIB.statueMusician, LIB.statuePlague];
                 const statue = statues[(tx+ty)%statues.length];
-                ctx.drawImage(tilesetLibrary, statue.sx, statue.sy, 32,32, rx,ry-8, TILE_SIZE,TILE_SIZE+8);
+                ctx.drawImage(tilesetObjects, statue.sx, statue.sy, 32,32, rx,ry-8, TILE_SIZE,TILE_SIZE+8);
                 break;
             }
             case TILES.PEDESTAL:
-                ctx.drawImage(tilesetLibrary, LIB.pedestal.sx, LIB.pedestal.sy, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                ctx.drawImage(tilesetObjects, LIB.pedestal.sx, LIB.pedestal.sy, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
                 const glowGrd = ctx.createRadialGradient(rx+TILE_SIZE/2,ry+TILE_SIZE/2,2, rx+TILE_SIZE/2,ry+TILE_SIZE/2,TILE_SIZE*1.4);
                 glowGrd.addColorStop(0,'rgba(255,217,125,0.3)');
                 glowGrd.addColorStop(1,'rgba(255,200,100,0)');
@@ -614,7 +613,7 @@
                 ctx.fillStyle='#ffffff'; ctx.fillRect(rx+4,ry+4,TILE_SIZE-8,TILE_SIZE-8);
                 break;
             case TILES.TORCH:
-                ctx.drawImage(tilesetLibrary, LIB.torchBlue.sx, LIB.torchBlue.sy, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                ctx.drawImage(tilesetObjects, LIB.torchBlue.sx, LIB.torchBlue.sy, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
                 break;
             default:
                 ctx.fillStyle='#020204'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE);
@@ -743,7 +742,6 @@
         document.getElementById('book-overlay').classList.remove('active');
         document.getElementById('stage-transition-screen').classList.remove('active');
         document.getElementById('action-hint').classList.remove('visible');
-        // Tenta iniciar áudio imediatamente (navegadores podem bloquear, mas a interação do usuário logo resolverá)
         startAudio();
         runIntro();
         lastTime=performance.now();

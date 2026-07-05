@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>O Plano Sacro — Arquivo Corrompido</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-void: #020204;
+            --gold-old: #b89443;
+            --gold-glow: #ffd97d;
+            --text-dark: #221c14;
+            --parchment: #cfc2a9;
+            --blue-cold: #1b263b;
+            --black: #050508;
+            --path-light: #e2e6ed;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            background:#000; width:100vw; height:100vh; display:flex; align-items:center; justify-content:center;
+            overflow:hidden; user-select:none; -webkit-user-select:none; font-family:'Silkscreen',monospace; cursor:crosshair;
+        }
+        #game-container {
+            position:relative; width:800px; height:600px; background:var(--bg-void);
+            box-shadow:0 0 40px rgba(0,0,0,0.8); image-rendering:pixelated; image-rendering:crisp-edges;
+        }
+        canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges; width:100%; height:100%; }
+        #intro-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%; background:#000; display:flex;
+            align-items:center; justify-content:center; flex-direction:column; z-index:30; opacity:1; transition:opacity 1.2s ease;
+        }
+        #intro-overlay.fade-out { opacity:0; pointer-events:none; }
+        .intro-phrase {
+            font-family:'Silkscreen',monospace; color:#c8a84e; font-size:1.1rem; text-align:center; position:absolute;
+            opacity:0; transition:opacity 1.8s ease; letter-spacing:0.08em; max-width:70%; line-height:2.2;
+            text-shadow:0 0 8px rgba(200,168,78,0.5);
+        }
+        #book-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85);
+            display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none;
+            transition:opacity 1s ease; z-index:10;
+        }
+        #book-overlay.active { opacity:1; pointer-events:all; }
+        #book-ui {
+            position:relative; width:700px; height:460px; background:var(--parchment);
+            box-shadow:inset 0 0 50px rgba(40,30,20,0.4),0 10px 30px rgba(0,0,0,0.7); display:flex; padding:40px;
+            transition:background 1.5s ease,box-shadow 1.5s ease;
+        }
+        #book-ui.corrupted-stage-1 { background:#d4c8ad; box-shadow:inset 0 0 40px rgba(30,20,10,0.5),0 10px 25px rgba(0,0,0,0.7); }
+        #book-ui.corrupted-stage-2 { background:#c4b590; box-shadow:inset 0 0 30px rgba(20,10,5,0.6),0 8px 20px rgba(0,0,0,0.8); }
+        #book-ui.corrupted-stage-3 { background:#3a3220; box-shadow:inset 0 0 20px rgba(0,0,0,0.8),0 5px 15px rgba(0,0,0,0.9); }
+        #book-ui.corrupted-final { background:#000; box-shadow:inset 0 0 100px rgba(0,0,0,1),0 0 50px rgba(184,148,67,0.1); }
+        .book-page {
+            flex:1; height:100%; padding:0 20px; color:var(--text-dark); font-size:0.9rem; line-height:1.8;
+            position:relative; transition:color 1.5s ease; overflow-y:auto;
+        }
+        .book-page.left { border-right:1px solid rgba(0,0,0,0.1); }
+        #book-ui.corrupted-final .book-page.left { border-right:1px solid rgba(255,255,255,0.05); }
+        #book-ui.corrupted-final .book-page { color:var(--gold-old); }
+        #book-ui.corrupted-stage-3 .book-page { color:#b8a878; }
+        .book-page .stain {
+            position:absolute; background:radial-gradient(circle,rgba(0,0,0,0.6) 0%,transparent 70%); pointer-events:none; z-index:1;
+        }
+        .corrupt-word { display:inline-block; transition:all 0.3s ease; }
+        .scratched { text-decoration:line-through; opacity:0.5; color:#5a4f43; }
+        .fading-letter { display:inline-block; transition:opacity 0.8s ease; }
+        .fading-letter.faded { opacity:0.2; }
+        .corrupt-swap { display:inline-block; position:relative; }
+        .corrupt-swap .original { transition:opacity 0.6s ease; }
+        .corrupt-swap .corrupted-version {
+            position:absolute; top:0; left:0; opacity:0; color:#b04040; font-weight:bold; transition:opacity 0.6s ease;
+        }
+        .corrupt-swap.showing-corrupted .original { opacity:0.2; }
+        .corrupt-swap.showing-corrupted .corrupted-version { opacity:1; }
+        #book-nav-hints {
+            position:absolute; bottom:20px; left:0; width:100%; display:flex; justify-content:space-between;
+            padding:0 40px; font-family:'Press Start 2P',monospace; font-size:0.55rem; color:rgba(0,0,0,0.4);
+            pointer-events:none; transition:color 1.5s ease; z-index:5;
+        }
+        #book-ui.corrupted-final #book-nav-hints { color:rgba(184,148,67,0.3); }
+        .letter-particle {
+            position:absolute; font-family:'Silkscreen',monospace; font-size:1rem; font-weight:bold; color:var(--gold-old);
+            user-select:none; pointer-events:none; transition:all 2.5s cubic-bezier(0.25,1,0.5,1);
+            text-shadow:0 0 4px rgba(255,217,125,0.3); z-index:15;
+        }
+        .letter-particle.pulsing { animation:lightPulse 2s infinite ease-in-out; }
+        @keyframes lightPulse {
+            0%,100% { text-shadow:0 0 4px rgba(255,217,125,0.4); color:var(--gold-old); }
+            50% { text-shadow:0 0 12px rgba(255,217,125,0.8); color:var(--gold-glow); }
+        }
+        #clickable-portal-trigger {
+            position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:140px; height:240px;
+            cursor:pointer; z-index:20; display:none;
+        }
+        #action-hint {
+            position:absolute; bottom:30px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace;
+            font-size:0.55rem; color:#fff; text-shadow:0 2px 4px #000; opacity:0; transition:opacity 0.3s ease;
+            pointer-events:none; z-index:5;
+        }
+        #action-hint.visible { opacity:1; }
+        #stage-transition-screen {
+            position:absolute; top:0; left:0; width:100%; height:100%; background:#000; display:flex;
+            align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 2s ease; z-index:100;
+        }
+        #stage-transition-screen.active { opacity:1; }
+        #stage-transition-screen p {
+            font-family:'Press Start 2P',monospace; font-size:0.75rem; color:var(--gold-old); letter-spacing:2px; text-align:center;
+        }
+    </style>
+</head>
+<body>
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    <div id="intro-overlay">
+        <span class="intro-phrase" id="intro-phrase-1">No princípio, havia apenas o Vazio.</span>
+        <span class="intro-phrase" id="intro-phrase-2">Então, a Ordem esculpiu o Plano Sacro.</span>
+        <span class="intro-phrase" id="intro-phrase-3">Um reino de luz perpétua e silêncio absoluto.</span>
+        <span class="intro-phrase" id="intro-phrase-4">Mas toda ordem esconde uma rachadura...</span>
+    </div>
+    <div id="action-hint">Pressione [E] para examinar</div>
+    <div id="book-overlay">
+        <div id="book-ui">
+            <div class="book-page left" id="pageLeft"></div>
+            <div class="book-page right" id="pageRight"></div>
+            <div id="book-nav-hints">
+                <span id="hintLeft">[A] Página Anterior</span>
+                <span id="hintRight">[D] Próxima Página</span>
+            </div>
+            <div id="clickable-portal-trigger"></div>
+        </div>
+    </div>
+    <div id="stage-transition-screen"><p>PRÓXIMA ETAPA<br>EM DESENVOLVIMENTO</p></div>
+</div>
+
+<script>
+(function() {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const VIRTUAL_W = 800, VIRTUAL_H = 600;
+    canvas.width = VIRTUAL_W; canvas.height = VIRTUAL_H;
+
+    const STATE = { INTRO:'intro', EXPLORE:'explore', BOOK:'book', ANIMS:'anims', PORTAL:'portal', NEXT:'next' };
+    let currentState = STATE.INTRO;
+
+    const TILE_SIZE = 32;
+    const MAP_W = 80;
+    const MAP_H = 200;
+    const mapData = Array.from({length:MAP_H}, ()=>new Array(MAP_W).fill(0));
+
+    const TILES = {
+        VOID:0,
+        PATH_CENTER:1,
+        PATH_EDGE:2,
+        FLOOR_LIB:3,
+        FLOOR_LIB_DARK:4,
+        WALL_LIB:5,
+        SHELF_H:6,
+        SHELF_V:7,
+        PILLAR:8,
+        PEDESTAL:9,
+        JANELA:10,
+        TORCH:11,
+        TELEPORT_TRAP:12,
+        SHELF_BROKEN:13,
+        STATUE:14,
+    };
+
+    function isSolid(tileId) {
+        return tileId===TILES.WALL_LIB || tileId===TILES.SHELF_H || tileId===TILES.SHELF_V ||
+               tileId===TILES.PILLAR || tileId===TILES.SHELF_BROKEN || tileId===TILES.STATUE;
+    }
+
+    // ==================== CARREGAMENTO DE ASSETS ====================
+    const tilesetGround = new Image();
+    tilesetGround.src = 'assets/imagem/tileset.png';
+    const tilesetLibrary = new Image();
+    tilesetLibrary.src = 'assets/imagem/library.png';
+    const playerSprite = new Image();
+    playerSprite.src = 'assets/imagem/charactersheet.png';
+
+    let assetsLoaded = 0;
+    const totalAssets = 3;
+    function onAssetLoad() { assetsLoaded++; }
+    tilesetGround.onload = onAssetLoad;
+    tilesetLibrary.onload = onAssetLoad;
+    playerSprite.onload = onAssetLoad;
+    tilesetGround.onerror = ()=> console.warn('tileset.png não encontrado');
+    tilesetLibrary.onerror = ()=> console.warn('library.png não encontrado');
+    playerSprite.onerror = ()=> console.warn('charactersheet.png não encontrado');
+
+    const FRAME_WIDTH=32, FRAME_HEIGHT=48;
+    const SPRITE_MAP = {
+        down:{idle:{x:0,y:0},walk:{x:0,y:48}},
+        up:{idle:{x:32,y:0},walk:{x:32,y:48}},
+        right:{idle:{x:64,y:0},walk:{x:64,y:48}},
+        left:{idle:{x:96,y:0},walk:{x:96,y:48}},
+    };
+
+    // Coordenadas dos sprites do tileset de chão (tileset.png)
+    const GROUND = {
+        pathCenter:   { sx:0, sy:0 },   // linha 0, colunas 0-15 (usaremos variação)
+        pathEdge:     { sx:0, sy:32 },  // linha 1
+        pathTrans:    { sx:0, sy:64 },  // linha 2 (transição)
+        wood:         { sx:0, sy:96 },  // linha 3 madeira normal (0-3)
+        woodBroken:   { sx:256, sy:96 }, // linha 3 coluna 8
+    };
+
+    // Coordenadas dos assets da biblioteca (library.png)
+    const LIB = {
+        bookshelfTop:    { sx:0,   sy:0 },
+        bookshelfMid:    { sx:32,  sy:0 },
+        bookshelfEnd:    { sx:64,  sy:0 },
+        bookshelfTop2:   { sx:0,   sy:32 },
+        bookshelfMid2:   { sx:32,  sy:32 },
+        bookshelfEnd2:   { sx:64,  sy:32 },
+        bookshelfTop3:   { sx:0,   sy:64 },
+        bookshelfMid3:   { sx:32,  sy:64 },
+        bookshelfEnd3:   { sx:64,  sy:64 },
+        pedestal:        { sx:128, sy:32 },
+        torchSmall:      { sx:160, sy:32 },
+        torchLarge:      { sx:192, sy:32 },
+        torchBlue:       { sx:224, sy:32 },
+        statuePrime:     { sx:288, sy:0 },
+        statueInfested:  { sx:320, sy:0 },
+        statueV1:        { sx:352, sy:0 },
+        statueJake:      { sx:384, sy:0 },
+        statueNiko:      { sx:416, sy:0 },
+        statueMusician:  { sx:448, sy:0 },
+        statuePlague:    { sx:480, sy:0 },
+    };
+
+    const CENTER_X = Math.floor(MAP_W/2);
+    const PEDESTAL_Y = 18;
+
+    function generateMap() {
+        for(let y=160; y<MAP_H; y++) {
+            for(let dx=-1; dx<=1; dx++) {
+                const x = CENTER_X + dx;
+                if(x>=0 && x<MAP_W) mapData[y][x] = (dx===0) ? TILES.PATH_CENTER : TILES.PATH_EDGE;
+            }
+        }
+        for(let y=120; y<160; y++) {
+            for(let dx=-1; dx<=1; dx++) {
+                const x = CENTER_X + dx;
+                if(x>=0 && x<MAP_W) mapData[y][x] = (dx===0) ? TILES.PATH_CENTER : TILES.PATH_EDGE;
+            }
+            if(y > 125 && y < 155) {
+                const numShelves = Math.floor(Math.random()*3)+1;
+                for(let i=0; i<numShelves; i++) {
+                    const side = Math.random()<0.5 ? -1 : 1;
+                    const dist = 4 + Math.floor(Math.random()*7);
+                    const sx = CENTER_X + side*dist;
+                    if(sx>7 && sx<MAP_W-8) {
+                        const tileType = Math.random()<0.45 ? TILES.SHELF_BROKEN : TILES.SHELF_H;
+                        mapData[y][sx] = tileType;
+                        if(Math.random()<0.3 && sx+side>=7 && sx+side<MAP_W-8) mapData[y][sx+side] = TILES.SHELF_BROKEN;
+                    }
+                }
+            }
+        }
+        for(let y=30; y<120; y++) {
+            for(let x=6; x<MAP_W-6; x++) {
+                mapData[y][x] = Math.random()<0.03 ? TILES.FLOOR_LIB_DARK : TILES.FLOOR_LIB;
+            }
+        }
+        for(let x=6; x<MAP_W-6; x++) { mapData[30][x]=TILES.WALL_LIB; mapData[119][x]=TILES.WALL_LIB; }
+        for(let y=30; y<120; y++) { mapData[y][6]=TILES.WALL_LIB; mapData[y][MAP_W-7]=TILES.WALL_LIB; }
+        for(let y=30; y<120; y++) {
+            for(let x=CENTER_X-2; x<=CENTER_X+2; x++) mapData[y][x]=TILES.FLOOR_LIB;
+        }
+        for(let y=35; y<115; y+=8) {
+            for(let x=9; x<CENTER_X-4; x++) if(x%7!==0 && y<110) mapData[y][x]=TILES.SHELF_H;
+            for(let x=CENTER_X+5; x<MAP_W-9; x++) if(x%7!==0 && y<110) mapData[y][x]=TILES.SHELF_H;
+            if(y>50 && y<100) {
+                mapData[y][CENTER_X-5]=TILES.WALL_LIB;
+                mapData[y][CENTER_X+5]=TILES.WALL_LIB;
+            }
+        }
+        for(let y=40; y<110; y+=12) {
+            mapData[y][CENTER_X-7]=TILES.TELEPORT_TRAP;
+            mapData[y][CENTER_X+7]=TILES.TELEPORT_TRAP;
+        }
+        for(let y=45; y<100; y+=15) {
+            mapData[y][CENTER_X-3]=TILES.PILLAR;
+            mapData[y][CENTER_X+3]=TILES.PILLAR;
+        }
+        for(let y=35; y<115; y+=10) {
+            mapData[y][CENTER_X-6]=TILES.TORCH;
+            mapData[y][CENTER_X+6]=TILES.TORCH;
+        }
+        // Estátuas decorativas nas laterais
+        for(let y=40; y<110; y+=20) {
+            if(mapData[y][CENTER_X-8]===TILES.FLOOR_LIB || mapData[y][CENTER_X-8]===TILES.FLOOR_LIB_DARK) mapData[y][CENTER_X-8]=TILES.STATUE;
+            if(mapData[y][CENTER_X+8]===TILES.FLOOR_LIB || mapData[y][CENTER_X+8]===TILES.FLOOR_LIB_DARK) mapData[y][CENTER_X+8]=TILES.STATUE;
+        }
+        for(let y=10; y<30; y++) {
+            for(let x=10; x<MAP_W-10; x++) mapData[y][x]=TILES.FLOOR_LIB_DARK;
+        }
+        for(let x=10; x<MAP_W-10; x++) { mapData[10][x]=TILES.WALL_LIB; mapData[29][x]=TILES.WALL_LIB; }
+        for(let y=10; y<30; y++) { mapData[y][10]=TILES.WALL_LIB; mapData[y][MAP_W-11]=TILES.WALL_LIB; }
+        for(let y=15; y<29; y++) for(let x=CENTER_X-1; x<=CENTER_X+1; x++) mapData[y][x]=TILES.FLOOR_LIB;
+        mapData[PEDESTAL_Y][CENTER_X]=TILES.PEDESTAL;
+        for(let x=CENTER_X-6; x<=CENTER_X+6; x++) {
+            mapData[11][x]=TILES.JANELA; mapData[12][x]=TILES.JANELA; mapData[13][x]=TILES.JANELA;
+        }
+        for(let y=20; y<27; y++) for(let x=CENTER_X-3; x<=CENTER_X+3; x++) if(mapData[y][x]===TILES.FLOOR_LIB||mapData[y][x]===TILES.FLOOR_LIB_DARK) mapData[y][x]=TILES.FLOOR_LIB;
+    }
+    generateMap();
+
+    const player = {
+        x:CENTER_X*TILE_SIZE, y:(MAP_H-8)*TILE_SIZE,
+        width:FRAME_WIDTH, height:FRAME_HEIGHT, speed:140,
+        animFrame:0, animTimer:0, isMoving:false, dir:'up'
+    };
+    const camera = { x:0, y:0, targetX:0, targetY:0, ease:0.08 };
+    function initCamera() {
+        camera.x=player.x-VIRTUAL_W/2; camera.y=player.y-VIRTUAL_H/2;
+        camera.targetX=camera.x; camera.targetY=camera.y;
+    }
+
+    const particles=[]; const MAX_P=50;
+    function spawnParticle() {
+        return {
+            x:player.x+(Math.random()-0.5)*500, y:player.y+(Math.random()-0.5)*400,
+            vx:(Math.random()-0.5)*0.15, vy:(Math.random()-0.5)*0.12-0.05,
+            life:1, decay:0.002+Math.random()*0.006, size:Math.random()<0.4?1:2,
+            hue:Math.random()<0.3?'blue':'gold'
+        };
+    }
+    function initParticles() { particles.length=0; for(let i=0;i<MAX_P;i++){let p=spawnParticle();p.life=Math.random();particles.push(p);} }
+    function updateParticles() {
+        for(let i=particles.length-1;i>=0;i--) {
+            let p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life-=p.decay;
+            if(p.life<=0) particles[i]=spawnParticle();
+        }
+    }
+
+    const keys={};
+    window.addEventListener('keydown', e=>{
+        const k=e.key.toLowerCase(); keys[k]=true; keys[e.code]=true;
+        if(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d',' '].includes(k)||
+           ['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+        if(currentState===STATE.EXPLORE && k==='e') {
+            const d=Math.hypot(player.x-CENTER_X*TILE_SIZE, player.y-PEDESTAL_Y*TILE_SIZE);
+            if(d<70) openBook();
+        } else if(currentState===STATE.BOOK) {
+            if(k==='d'||e.key==='ArrowRight') nextBookPage();
+            if(k==='a'||e.key==='ArrowLeft') prevBookPage();
+        }
+    });
+    window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; keys[e.code]=false; });
+
+    function checkCollision(nx,ny) {
+        const b=6;
+        const pts=[{x:nx-player.width/2+b,y:ny-player.height/4},{x:nx+player.width/2-b,y:ny-player.height/4},
+                   {x:nx-player.width/2+b,y:ny+player.height/4},{x:nx+player.width/2-b,y:ny+player.height/4}];
+        for(let p of pts) {
+            const tx=Math.floor(p.x/TILE_SIZE), ty=Math.floor(p.y/TILE_SIZE);
+            if(tx>=0&&tx<MAP_W&&ty>=0&&ty<MAP_H&&isSolid(mapData[ty][tx])) return true;
+        }
+        return false;
+    }
+
+    function checkTeleportTraps() {
+        const tx=Math.floor(player.x/TILE_SIZE), ty=Math.floor(player.y/TILE_SIZE);
+        if(tx>=0&&tx<MAP_W&&ty>=0&&ty<MAP_H&&mapData[ty][tx]===TILES.TELEPORT_TRAP) {
+            player.x=CENTER_X*TILE_SIZE; player.y=(ty-3)*TILE_SIZE;
+        }
+    }
+
+    const bookPages=[{
+        left:`<h3 style="text-align:center;">⚜ O Plano Sacro<br>— Gênese —</h3><p>No princípio, quando o tempo ainda não existia, havia apenas o Vazio. Foi a Mão Ordenadora quem desceu sobre a escuridão e pronunciou a Primeira Lei.</p>`,
+        right:`<p>Assim nasceu o Plano Sacro, um reino de <strong>perfeita ordem</strong>, onde cada átomo ocupava seu lugar designado e cada alma seguia seu propósito eterno. As crônicas sagradas descrevem este plano como um jardim de luz perpétua.</p>`,
+        corruptLevel:0
+    },{
+        left:`<p>A geometria do Plano Sacro era impecável. Torres de cristal se erguiam em direção a um céu dourado, suas formas seguindo proporções divinas.</p>`,
+        right:`<p>Os Registradores — servos escolhidos da Ordem — documentavam cada evento, cada nascimento e cada pensamento. Nada escapava ao seu olhar meticuloso.</p>`,
+        corruptLevel:0
+    },{
+        left:`<p>Os habitantes do Plano Sacro desfrutavam de uma existência plena. Não conheciam o sofrimento, pois a Ordem os protegia de toda imperfeição.</p>`,
+        right:`<p>Cada dia era uma celebração silenciosa da <strong>perfeição</strong>. Não havia conflitos, pois não havia desacordo. Não havia tristeza, pois não havia perda.</p>`,
+        corruptLevel:0
+    },{
+        left:`<p>Os textos oficiais reafirmam que o Plano Sacro era um reino de <span class="corrupt-swap"><span class="original">perfeita ordem</span><span class="corrupted-version">perfeita prisão</span></span>. Os Registradores garantiam que cada aspecto da existência fosse <span class="corrupt-swap"><span class="original">cuidadosamente mantido</span><span class="corrupted-version">rigidamente controlado</span></span>.</p>`,
+        right:`<p>Sob a superfície da harmonia, <span class="fading-letter">e</span><span class="fading-letter">c</span><span class="fading-letter">o</span><span class="fading-letter">s</span> de algo mais profundo começam a ser percebidos por aqueles que <span class="fading-letter">o</span><span class="fading-letter">u</span><span class="fading-letter">s</span><span class="fading-letter">a</span><span class="fading-letter">m</span> olhar além.</p>`,
+        corruptLevel:1
+    },{
+        left:`<p>Alguns textos <span class="scratched">apócrifos</span> mencionam que a Ordem não era uma bênção, mas uma <span class="corrupt-swap"><span class="original">dádiva</span><span class="corrupted-version">sentença</span></span>. Que as torres de cristal eram também <span class="scratched">monumentos</span> <span class="fading-letter">g</span><span class="fading-letter">a</span><span class="fading-letter">i</span><span class="fading-letter">o</span><span class="fading-letter">l</span><span class="fading-letter">a</span><span class="fading-letter">s</span>.</p>`,
+        right:`<p>Os Registradores <span class="fading-letter">n</span><span class="fading-letter">ã</span><span class="fading-letter">o</span> documentavam — eles <span class="corrupt-swap"><span class="original">preservavam</span><span class="corrupted-version">encobriam</span></span>.</p>`,
+        corruptLevel:1
+    },{
+        left:`<p class="scratched">A felicidade era universal.</p><p>Aqueles que resistiam à Ordem eram <span class="corrupt-swap"><span class="original">reeducados</span><span class="corrupted-version">apagados</span></span>. Seus nomes <span class="fading-letter">d</span><span class="fading-letter">e</span><span class="fading-letter">s</span><span class="fading-letter">a</span><span class="fading-letter">p</span><span class="fading-letter">a</span><span class="fading-letter">r</span><span class="fading-letter">e</span><span class="fading-letter">c</span><span class="fading-letter">i</span><span class="fading-letter">a</span><span class="fading-letter">m</span>.</p>`,
+        right:`<p>Nas margens dos registros oficiais, <span class="fading-letter">m</span><span class="fading-letter">a</span><span class="fading-letter">r</span><span class="fading-letter">c</span><span class="fading-letter">a</span><span class="fading-letter">s</span> de rasura são visíveis. Páginas inteiras foram <span class="scratched">reescritas</span>.</p>`,
+        corruptLevel:2
+    },{
+        left:`<p style="opacity:0.7;">O Plano Sacro nunca foi um reino.</p><p style="color:#8b2020;">Foi uma <strong>gaiola dourada</strong> desde o início.</p><p>A Ordem não salvou ninguém. Apenas <span class="fading-letter">s</span><span class="fading-letter">u</span><span class="fading-letter">p</span><span class="fading-letter">r</span><span class="fading-letter">i</span><span class="fading-letter">m</span><span class="fading-letter">i</span><span class="fading-letter">u</span> o caos que existia antes.</p>`,
+        right:`<p>E o caos era a <strong>verdadeira liberdade</strong>.</p><p style="text-align:center;opacity:0.5;">A tinta dourada esconde <span class="corrupt-swap"><span class="original">verdades</span><span class="corrupted-version">mentiras</span></span> sob a superfície.</p>`,
+        corruptLevel:3
+    },{
+        left:`<p style="text-align:center;opacity:0.6;">A verdade está enterrada.</p><p style="text-align:center;">Os Registradores mentiram.</p><p style="text-align:center;">A <span class="fading-letter">p</span><span class="fading-letter">o</span><span class="fading-letter">r</span><span class="fading-letter">t</span><span class="fading-letter">a</span> sempre esteve aqui.</p>`,
+        right:`<p style="text-align:center;opacity:0.4;">Alguém tentou avisar.</p><p style="text-align:center;opacity:0.3;">Alguém deixou pistas.</p>`,
+        corruptLevel:4
+    },{
+        left:`<p style="text-align:center;color:#c8a84e;letter-spacing:0.15em;font-size:1.2rem;">A verdade está além</p>`,
+        right:`<p style="text-align:center;color:#c8a84e;letter-spacing:0.15em;font-size:1.2rem;">desta porta</p>`,
+        corruptLevel:5
+    }];
+    let currentPageIndex=0;
+
+    function openBook() {
+        currentState=STATE.BOOK; currentPageIndex=0;
+        document.getElementById('book-overlay').classList.add('active');
+        document.getElementById('action-hint').classList.remove('visible');
+        updateBookUI();
+    }
+    function updateBookUI() {
+        const pageData=bookPages[currentPageIndex];
+        const bookUi=document.getElementById('book-ui');
+        bookUi.classList.remove('corrupted-stage-1','corrupted-stage-2','corrupted-stage-3','corrupted-final');
+        document.getElementById('pageLeft').innerHTML='';
+        document.getElementById('pageRight').innerHTML='';
+        document.getElementById('clickable-portal-trigger').style.display='none';
+        document.getElementById('hintLeft').style.opacity=1;
+        document.getElementById('hintRight').style.opacity=1;
+        if(pageData.corruptLevel===5) {
+            bookUi.classList.add('corrupted-final');
+            document.getElementById('hintLeft').style.opacity=0;
+            document.getElementById('hintRight').style.opacity=0;
+            currentState=STATE.ANIMS;
+            triggerDoorFormation();
+        } else {
+            if(pageData.corruptLevel===1) bookUi.classList.add('corrupted-stage-1');
+            if(pageData.corruptLevel===2) bookUi.classList.add('corrupted-stage-2');
+            if(pageData.corruptLevel>=3) bookUi.classList.add('corrupted-stage-3');
+            document.getElementById('pageLeft').innerHTML=pageData.left;
+            document.getElementById('pageRight').innerHTML=pageData.right;
+            document.getElementById('hintLeft').style.opacity=currentPageIndex>0?1:0;
+            applyStains(document.getElementById('pageLeft'),pageData.corruptLevel);
+            applyStains(document.getElementById('pageRight'),pageData.corruptLevel);
+            if(pageData.corruptLevel>=1) setTimeout(animateTextCorruption,500);
+        }
+    }
+    function applyStains(el,level) {
+        el.querySelectorAll('.stain').forEach(s=>s.remove());
+        if(level===0) return;
+        const count=Math.min(level*3,10);
+        for(let i=0;i<count;i++) {
+            const s=document.createElement('div'); s.className='stain';
+            s.style.width=(25+Math.random()*55)+'px'; s.style.height=(25+Math.random()*55)+'px';
+            s.style.left=Math.random()*80+'%'; s.style.top=Math.random()*80+'%';
+            s.style.opacity=0.2+Math.random()*0.4; el.appendChild(s);
+        }
+    }
+    function animateTextCorruption() {
+        document.querySelectorAll('.corrupt-swap').forEach(el=>{
+            setInterval(()=>el.classList.toggle('showing-corrupted'),2600+Math.random()*2000);
+        });
+        document.querySelectorAll('.fading-letter').forEach((el,i)=>{
+            setTimeout(()=>el.classList.add('faded'),600+i*100);
+            setInterval(()=>el.classList.toggle('faded'),3000+i*350);
+        });
+    }
+    function nextBookPage() {
+        if(currentPageIndex<bookPages.length-1 && currentState===STATE.BOOK){ currentPageIndex++; updateBookUI(); }
+    }
+    function prevBookPage() {
+        if(currentPageIndex>0 && bookPages[currentPageIndex].corruptLevel<5 && currentState===STATE.BOOK){ currentPageIndex--; updateBookUI(); }
+    }
+
+    function triggerDoorFormation() {
+        const bookUi=document.getElementById('book-ui');
+        const sourceText="O PLANO SACRO ERA UMA MENTIRA E UMA PRISÃO A VERDADE SE LIBERTA DA ORDEM DO TEMPO DOS ARQUITETOS A ESTRELA GUIA O VAZIO NAO BLOQUEIA OS PASSOS A PORTA SEMPRE ESTEVE AQUI";
+        const letters=sourceText.replace(/\s/g,'').split('');
+        const doorW=140, doorH=240;
+        const startX=(700-doorW)/2, startY=(460-doorH)/2+10;
+        const targetPoints=[];
+        for(let y=0; y<doorH; y+=12) {
+            targetPoints.push({x:startX, y:startY+y});
+            targetPoints.push({x:startX+doorW, y:startY+y});
+        }
+        for(let x=0; x<=doorW; x+=10) {
+            targetPoints.push({x:startX+x, y:startY});
+            targetPoints.push({x:startX+x, y:startY+doorH});
+        }
+        const totalPoints=Math.min(letters.length*4, targetPoints.length);
+        const particleEls=[];
+        for(let i=0; i<totalPoints; i++) {
+            const span=document.createElement('div'); span.className='letter-particle';
+            span.innerText=letters[i%letters.length];
+            span.style.left=`${Math.random()*600+50}px`; span.style.top=`${Math.random()*360+50}px`;
+            bookUi.appendChild(span);
+            particleEls.push({element:span, targetX:targetPoints[i].x, targetY:targetPoints[i].y});
+        }
+        setTimeout(()=>{
+            particleEls.forEach((pt,i)=>{
+                setTimeout(()=>{
+                    pt.element.style.left=`${pt.targetX}px`; pt.element.style.top=`${pt.targetY}px`;
+                    pt.element.classList.add('pulsing');
+                },i*10);
+            });
+            setTimeout(()=>{
+                currentState=STATE.PORTAL;
+                const trigger=document.getElementById('clickable-portal-trigger');
+                trigger.style.display='block';
+                trigger.onclick=()=>{
+                    currentState=STATE.NEXT;
+                    document.getElementById('book-overlay').classList.remove('active');
+                    document.getElementById('stage-transition-screen').classList.add('active');
+                };
+            },totalPoints*10+2500);
+        },1000);
+    }
+
+    // ==================== RENDERIZAÇÃO COM TILESETS ====================
+    function drawTile(tx, ty, tileId) {
+        const sx = tx*TILE_SIZE-Math.round(camera.x);
+        const sy = ty*TILE_SIZE-Math.round(camera.y);
+        if(sx<-TILE_SIZE||sx>VIRTUAL_W+TILE_SIZE||sy<-TILE_SIZE||sy>VIRTUAL_H+TILE_SIZE) return;
+        const rx=Math.round(sx), ry=Math.round(sy);
+
+        // Fallback procedural se assets não carregaram
+        const useImages = assetsLoaded >= 2;
+
+        if(!useImages) {
+            // desenho procedural simplificado
+            ctx.fillStyle='#020204'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE);
+            switch(tileId) {
+                case TILES.PATH_CENTER: ctx.fillStyle='#9a9590'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE); break;
+                case TILES.PATH_EDGE: ctx.fillStyle='#252220'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE); break;
+                case TILES.FLOOR_LIB: ctx.fillStyle='#2d2013'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE); break;
+                case TILES.FLOOR_LIB_DARK: ctx.fillStyle='#1a1410'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE); break;
+                default: ctx.fillStyle='#111'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE);
+            }
+            return;
+        }
+
+        // Seleciona sprite baseado no tipo
+        switch(tileId) {
+            case TILES.VOID:
+                ctx.fillStyle='#020204'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE);
+                break;
+            case TILES.PATH_CENTER: {
+                const col = (tx+ty)%16;
+                ctx.drawImage(tilesetGround, col*32, 0, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                break;
+            }
+            case TILES.PATH_EDGE: {
+                const col = (tx+ty)%16;
+                ctx.drawImage(tilesetGround, col*32, 32, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                break;
+            }
+            case TILES.FLOOR_LIB: {
+                const col = (tx+ty)%4;
+                ctx.drawImage(tilesetGround, col*32, 96, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                break;
+            }
+            case TILES.FLOOR_LIB_DARK: {
+                const col = 8 + (tx+ty)%4;
+                ctx.drawImage(tilesetGround, col*32, 96, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                break;
+            }
+            case TILES.WALL_LIB:
+                ctx.fillStyle='#1a1410'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE);
+                ctx.fillStyle='#2a2218'; ctx.fillRect(rx+4,ry+4,TILE_SIZE-8,TILE_SIZE-8);
+                break;
+            case TILES.SHELF_H:
+                ctx.drawImage(tilesetLibrary, LIB.bookshelfMid.sx, LIB.bookshelfMid.sy, 32,32, rx,ry-12, TILE_SIZE,TILE_SIZE+12);
+                break;
+            case TILES.SHELF_V:
+                ctx.drawImage(tilesetLibrary, LIB.bookshelfMid2.sx, LIB.bookshelfMid2.sy, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                break;
+            case TILES.SHELF_BROKEN:
+                ctx.save(); ctx.translate(rx+TILE_SIZE/2, ry+TILE_SIZE/2);
+                ctx.rotate((tx%3-1)*0.2);
+                ctx.drawImage(tilesetLibrary, LIB.bookshelfMid.sx, LIB.bookshelfMid.sy, 32,32, -16,-16, TILE_SIZE,TILE_SIZE);
+                ctx.restore();
+                break;
+            case TILES.PILLAR:
+                ctx.fillStyle='#3a3e45'; ctx.fillRect(rx-2,ry-24,TILE_SIZE+4,TILE_SIZE+24);
+                ctx.fillStyle='#525863'; ctx.fillRect(rx+4,ry-24,TILE_SIZE-8,TILE_SIZE+24);
+                break;
+            case TILES.STATUE: {
+                const statues = [LIB.statuePrime, LIB.statueInfested, LIB.statueV1, LIB.statueJake, LIB.statueNiko, LIB.statueMusician, LIB.statuePlague];
+                const statue = statues[(tx+ty)%statues.length];
+                ctx.drawImage(tilesetLibrary, statue.sx, statue.sy, 32,32, rx,ry-8, TILE_SIZE,TILE_SIZE+8);
+                break;
+            }
+            case TILES.PEDESTAL:
+                ctx.drawImage(tilesetLibrary, LIB.pedestal.sx, LIB.pedestal.sy, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                // brilho extra
+                const glowGrd = ctx.createRadialGradient(rx+TILE_SIZE/2,ry+TILE_SIZE/2,2, rx+TILE_SIZE/2,ry+TILE_SIZE/2,TILE_SIZE*1.4);
+                glowGrd.addColorStop(0,'rgba(255,217,125,0.3)');
+                glowGrd.addColorStop(1,'rgba(255,200,100,0)');
+                ctx.fillStyle=glowGrd; ctx.fillRect(rx-TILE_SIZE/2,ry-TILE_SIZE/2,TILE_SIZE*2,TILE_SIZE*2);
+                break;
+            case TILES.JANELA:
+                const grad=ctx.createLinearGradient(rx,ry,rx,ry+TILE_SIZE);
+                grad.addColorStop(0,'#ffd97d'); grad.addColorStop(0.5,'#fff8e7'); grad.addColorStop(1,'#ffd97d');
+                ctx.fillStyle=grad; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE);
+                ctx.fillStyle='#ffffff'; ctx.fillRect(rx+4,ry+4,TILE_SIZE-8,TILE_SIZE-8);
+                break;
+            case TILES.TORCH:
+                ctx.drawImage(tilesetLibrary, LIB.torchBlue.sx, LIB.torchBlue.sy, 32,32, rx,ry, TILE_SIZE,TILE_SIZE);
+                break;
+            default:
+                ctx.fillStyle='#020204'; ctx.fillRect(rx,ry,TILE_SIZE,TILE_SIZE);
+        }
+    }
+
+    function drawMap() {
+        const startTX=Math.floor(camera.x/TILE_SIZE)-1, startTY=Math.floor(camera.y/TILE_SIZE)-1;
+        const endTX=Math.ceil((camera.x+VIRTUAL_W)/TILE_SIZE)+1, endTY=Math.ceil((camera.y+VIRTUAL_H)/TILE_SIZE)+1;
+        for(let ty=startTY; ty<=endTY; ty++) {
+            for(let tx=startTX; tx<=endTX; tx++) {
+                if(tx>=0&&tx<MAP_W&&ty>=0&&ty<MAP_H) drawTile(tx,ty,mapData[ty][tx]);
+                else {
+                    const sx=tx*TILE_SIZE-Math.round(camera.x), sy=ty*TILE_SIZE-Math.round(camera.y);
+                    ctx.fillStyle='#020204'; ctx.fillRect(Math.round(sx),Math.round(sy),TILE_SIZE,TILE_SIZE);
+                }
+            }
+        }
+    }
+
+    function drawPlayer() {
+        const px=Math.round(player.x-player.width/2), py=Math.round(player.y-player.height/2);
+        if(assetsLoaded>=3) {
+            const dir=player.dir;
+            const frame=player.isMoving?(player.animFrame%2===0?'idle':'walk'):'idle';
+            const src=SPRITE_MAP[dir][frame];
+            ctx.drawImage(playerSprite, src.x, src.y, FRAME_WIDTH, FRAME_HEIGHT, px, py, player.width, player.height);
+        } else {
+            ctx.fillStyle='#eef3f7'; ctx.fillRect(px,py,player.width,player.height);
+            ctx.fillStyle='#ffffff'; ctx.fillRect(px+2,py,player.width-4,player.height-4);
+            const starX=px+player.width/2, starY=py+player.height/2;
+            ctx.fillStyle='#ffd97d';
+            ctx.fillRect(starX-2,starY-8,4,16); ctx.fillRect(starX-8,starY-2,16,4);
+            ctx.fillStyle='#ffffff'; ctx.fillRect(starX-2,starY-2,4,4);
+        }
+    }
+
+    function drawParticlesOnMap() {
+        for(const p of particles) {
+            const sx=p.x-Math.round(camera.x), sy=p.y-Math.round(camera.y);
+            if(sx<-4||sx>VIRTUAL_W+4||sy<-4||sy>VIRTUAL_H+4) continue;
+            const alpha=p.life*0.4;
+            ctx.fillStyle=p.hue==='blue'?`rgba(100,140,180,${alpha})`:`rgba(210,190,140,${alpha})`;
+            ctx.fillRect(Math.round(sx),Math.round(sy),p.size,p.size);
+        }
+    }
+
+    function render() {
+        ctx.fillStyle='#020204'; ctx.fillRect(0,0,VIRTUAL_W,VIRTUAL_H);
+        if(currentState===STATE.INTRO||currentState===STATE.BOOK||currentState===STATE.ANIMS||
+           currentState===STATE.PORTAL||currentState===STATE.NEXT) {
+            const vignette=ctx.createRadialGradient(VIRTUAL_W/2,VIRTUAL_H/2,100,VIRTUAL_W/2,VIRTUAL_H/2,450);
+            vignette.addColorStop(0,'rgba(0,0,0,0)'); vignette.addColorStop(1,'rgba(0,0,2,0.9)');
+            ctx.fillStyle=vignette; ctx.fillRect(0,0,VIRTUAL_W,VIRTUAL_H);
+            return;
+        }
+        drawMap();
+        drawParticlesOnMap();
+        drawPlayer();
+        const vignette=ctx.createRadialGradient(VIRTUAL_W/2,VIRTUAL_H/2,120,VIRTUAL_W/2,VIRTUAL_H/2,420);
+        vignette.addColorStop(0,'rgba(0,0,0,0)'); vignette.addColorStop(0.6,'rgba(2,2,4,0.4)');
+        vignette.addColorStop(1,'rgba(0,0,2,0.92)');
+        ctx.fillStyle=vignette; ctx.fillRect(0,0,VIRTUAL_W,VIRTUAL_H);
+    }
+
+    let lastTime=performance.now();
+    function update(timestamp) {
+        const dt=Math.min((timestamp-lastTime)/1000,0.1); lastTime=timestamp;
+        if(currentState===STATE.EXPLORE) {
+            let moveX=0,moveY=0;
+            if(keys['w']||keys['arrowup']) moveY=-1;
+            if(keys['s']||keys['arrowdown']) moveY=1;
+            if(keys['a']||keys['arrowleft']) moveX=-1;
+            if(keys['d']||keys['arrowright']) moveX=1;
+            player.isMoving=(moveX!==0||moveY!==0);
+            if(player.isMoving) {
+                const len=Math.hypot(moveX,moveY);
+                const dx=(moveX/len)*player.speed*dt, dy=(moveY/len)*player.speed*dt;
+                if(!checkCollision(player.x+dx,player.y)) player.x+=dx;
+                if(!checkCollision(player.x,player.y+dy)) player.y+=dy;
+                player.animTimer+=dt;
+                if(player.animTimer>0.18){player.animFrame=(player.animFrame+1)%2;player.animTimer=0;}
+                if(Math.abs(moveY)>Math.abs(moveX)) player.dir=moveY<0?'up':'down';
+                else if(Math.abs(moveX)>Math.abs(moveY)) player.dir=moveX>0?'right':'left';
+            } else {
+                player.animTimer+=dt;
+                if(player.animTimer>0.25){player.animFrame=(player.animFrame+1)%2;player.animTimer=0;}
+            }
+            checkTeleportTraps();
+            camera.targetX=player.x-VIRTUAL_W/2; camera.targetY=player.y-VIRTUAL_H/2;
+            camera.x+=(camera.targetX-camera.x)*camera.ease; camera.y+=(camera.targetY-camera.y)*camera.ease;
+            const pDist=Math.hypot(player.x-CENTER_X*TILE_SIZE, player.y-PEDESTAL_Y*TILE_SIZE);
+            const hint=document.getElementById('action-hint');
+            if(pDist<70) hint.classList.add('visible'); else hint.classList.remove('visible');
+            updateParticles();
+        }
+    }
+
+    function gameLoop(timestamp) { update(timestamp); render(); requestAnimationFrame(gameLoop); }
+
+    function runIntro() {
+        const phrases=[
+            document.getElementById('intro-phrase-1'), document.getElementById('intro-phrase-2'),
+            document.getElementById('intro-phrase-3'), document.getElementById('intro-phrase-4'),
+        ];
+        let idx=0;
+        function showNext() {
+            if(idx>=phrases.length) {
+                setTimeout(()=>{
+                    document.getElementById('intro-overlay').classList.add('fade-out');
+                    currentState=STATE.EXPLORE; initCamera(); initParticles();
+                    setTimeout(()=>{document.getElementById('intro-overlay').style.display='none';},1200);
+                },800);
+                return;
+            }
+            phrases[idx].style.opacity='1';
+            setTimeout(()=>{phrases[idx].style.opacity='0';idx++;setTimeout(showNext,700);},3500);
+        }
+        phrases.forEach(p=>{p.style.opacity='0';p.style.position='absolute';p.style.top='50%';p.style.left='50%';p.style.transform='translate(-50%,-50%)';});
+        setTimeout(showNext,600);
+    }
+
+    function init() {
+        initCamera(); initParticles(); currentState=STATE.INTRO;
+        document.getElementById('intro-overlay').style.display='flex';
+        document.getElementById('book-overlay').classList.remove('active');
+        document.getElementById('stage-transition-screen').classList.remove('active');
+        document.getElementById('action-hint').classList.remove('visible');
+        runIntro();
+        lastTime=performance.now();
+        requestAnimationFrame(gameLoop);
+    }
+    init();
+})();
+</script>
+</body>
+</html>
